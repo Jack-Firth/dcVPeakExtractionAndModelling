@@ -1,5 +1,7 @@
+import sys
 import numpy as np
 import scipy
+from scipy.signal import savgol_filter
 import sympy
 import matplotlib.pyplot as plt
 from matplotlib.widgets import SpanSelector
@@ -7,9 +9,17 @@ from matplotlib.widgets import SpanSelector
 allXAxisLabel = "Voltage / V"
 allYAxisLabel = "Current / \u03BCA"
 
+def runLog(message, newRun=False):
+    if(newRun == True):
+        f = open(".out/log.out", 'w')
+    else:
+        f = open(".out/log.out", 'a')
+    f.write(str(message) + '\n')
+    f.close()
+    
 
 def separatePeaks(inputdcV):
-    print("Separating forward and reverse scans...")
+    runLog("Separating forward and reverse scans...")
     if(inputdcV[2][1] < 0.001):
         inputdcV[:, 1] = inputdcV[:, 1]*1000000
     nDataPoints = len(inputdcV)
@@ -19,14 +29,14 @@ def separatePeaks(inputdcV):
     forwardScan = inputdcV[:midPoint]
     reverseScan = inputdcV[midPoint:]
     allData = np.column_stack((forwardScan, reverseScan))
-    print("Separated forward and reverse scans")
+    runLog("Separated forward and reverse scans")
 
     # plt.plot(allData[:, 0], allData[:, 1], 'r', label="Forward Scan")
     # plt.plot(allData[:, 2], allData[:, 3], 'b', label="Reverse Scan")
     # plt.xlabel(allXAxisLabel)
     # plt.ylabel(allYAxisLabel)
     # plt.legend(loc='upper left')
-    # plt.show()
+    # plt.show(block=False)
 
     # toContinue = True
     # while(toContinue == False):
@@ -43,7 +53,7 @@ def fitPolynomialBaseline(fullDataset, echemRegion):
 
     eWindowStart = echemRegion[0][0]
     eWindowEnd = echemRegion[len(echemRegion)-1][0]
-    print("Removing region " + eWindowStart.astype('str') +
+    runLog("Removing region " + eWindowStart.astype('str') +
           " - " + eWindowEnd.astype('str') + " V")
 
     for i in range(len(fullDataset)):
@@ -73,7 +83,7 @@ def plotPolys(plt, fullDataset, fittingData, echemRegion, polyQ=False):
 
     if(polyQ == True):
         polyArray = np.delete(polyArray, 0, 1)
-        np.savetxt("./polys.out", polyArray)
+        np.savetxt(".out/polys.out", polyArray)
 
 # ^ Generates polynomials and plots them to a given graph
 
@@ -86,27 +96,31 @@ def selectCroppingRegion(xmin, xmax):
     global currentUISelect
     global zoomedLine
 
-    indmin, indmax = np.searchsorted(voltageUISelect, (xmin, xmax))
+    try:
 
-    thisx = voltageUISelect[indmin: indmax]
-    thisy = currentUISelect[indmin: indmax]
-    zoomedLine.set_data(thisx, thisy)
-    ax2.set_xlim(thisx.min()-0.1, thisx.max()+0.1)
-    ax2.set_ylim(thisy.min()-1, thisy.max()+1)
-    ax2.cla()
+        indmin, indmax = np.searchsorted(voltageUISelect, (xmin, xmax))
 
-    echemData = np.c_[voltageUISelect, currentUISelect]
-    echemWindow = np.c_[thisx, thisy]
+        thisx = voltageUISelect[indmin: indmax]
+        thisy = currentUISelect[indmin: indmax]
+        zoomedLine.set_data(thisx, thisy)
+        ax2.set_xlim(thisx.min()-0.1, thisx.max()+0.1)
+        ax2.set_ylim(thisy.min()-1, thisy.max()+1)
+        ax2.cla()
 
-    plotPolys(ax2, echemData, fittingData=fitPolynomialBaseline(
-        echemData, echemWindow), echemRegion=echemWindow, polyQ=True)
-    fig.canvas.draw_idle()
+        echemData = np.c_[voltageUISelect, currentUISelect]
+        echemWindow = np.c_[thisx, thisy]
 
-    baseline = np.genfromtxt(".out/polys.out")
-    np.savetxt(".out/window.out", np.c_[thisx, thisy])
-    np.savetxt(".out/baseline.out", baseline)
-    print("updated window file")
-# ^ Selects region of interest and calls plotPolys to plot polynomial baselines
+        plotPolys(ax2, echemData, fittingData=fitPolynomialBaseline(
+            echemData, echemWindow), echemRegion=echemWindow, polyQ=True)
+        fig.canvas.draw_idle()
+
+        baseline = np.genfromtxt(".out/polys.out")
+        np.savetxt(".out/window.out", np.c_[thisx, thisy])
+        np.savetxt(".out/baseline.out", baseline)
+        runLog("updated window file")
+    # ^ Selects region of interest and calls plotPolys to plot polynomial baselines
+    except Exception as e:
+        runLog(e)
 
 
 def baselineSubtraction(echemData, baseline):
@@ -121,7 +135,7 @@ def focusData(wideData):
     bottom = round(0.1*len(wideData))
     top = round(0.9*len(wideData))
     narrowData = wideData[bottom:top, :]
-    smoothData = signal.savgol_filter(narrowData[:, 1], 21, 3)
+    smoothData = scipy.signal.savgol_filter(narrowData[:, 1], 21, 3)
     returnData = np.zeros(((top-bottom), 2))
     (returnData[:, 0], returnData[:, 1]) = (narrowData[:, 0], smoothData)
     plt.plot(returnData[:, 0], returnData[:, 1])
@@ -130,8 +144,8 @@ def focusData(wideData):
 
 
 def findPeaks(dataset):
-    peaks = signal.find_peaks(dataset[:, 1], height=1, prominence=0.05)
-    print(peaks)
+    peaks = scipy.signal.find_peaks(dataset[:, 1], height=1, prominence=0.05)
+#    print(peaks)
 
 
 def selectionUI(echemData, echemWindow=np.empty([]), fittingData=np.empty([])):
@@ -142,7 +156,7 @@ def selectionUI(echemData, echemWindow=np.empty([]), fittingData=np.empty([])):
     global currentUISelect
     global zoomedLine
 
-    print("Selecting activity region")
+    runLog("Selecting activity region")
 
     fig = plt.figure()
     ax = fig.add_subplot(121)
@@ -168,12 +182,16 @@ def selectionUI(echemData, echemWindow=np.empty([]), fittingData=np.empty([])):
 
     toContinue = False
     while(toContinue == False):
-        interestRegion = SpanSelector(ax, selectCroppingRegion, 'horizontal', useblit=True,
+        try:
+            interestRegion = SpanSelector(ax, selectCroppingRegion, 'horizontal', useblit=True,
                                       rectprops=dict(alpha=0.5, facecolor='red'), span_stays=True)
-        plt.legend()
-        plt.show()
+            plt.legend()
+            plt.show(block=False)
+        except Exception as e:
+            runLog(e)
+
         echemWindow = np.genfromtxt('.out/window.out', delimiter=" ")
-        print("read window file")
+        runLog("read window file")
 
         nPoly = int(input("Select Polynomial Order: "))
         polyBaselines = np.genfromtxt('.out/polys.out', delimiter=" ")
@@ -191,7 +209,7 @@ def selectionUI(echemData, echemWindow=np.empty([]), fittingData=np.empty([])):
 # ^ Front end of selection
 
 
-print("Running")
+runLog("Running", True)
 # loads in input dcV file and separates into anodic and cathodic data
 inputdcV = np.loadtxt('Test dcV.csv', delimiter=',', skiprows=1)
 allData = separatePeaks(inputdcV)
