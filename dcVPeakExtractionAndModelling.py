@@ -135,18 +135,19 @@ def focusData(wideData):
     bottom = round(0.1*len(wideData))
     top = round(0.9*len(wideData))
     narrowData = wideData[bottom:top, :]
-    smoothData = scipy.signal.savgol_filter(narrowData[:, 1], 21, 3)
-    returnData = np.zeros(((top-bottom), 2))
-    (returnData[:, 0], returnData[:, 1]) = (narrowData[:, 0], smoothData)
-    plt.plot(returnData[:, 0], returnData[:, 1])
-    plt.show()
+    returnData = narrowData
     return(returnData)
 
 
 def findPeaks(dataset):
-    peaks = scipy.signal.find_peaks(dataset[:, 1], height=1, prominence=0.05)
-#    print(peaks)
-
+    peaks, peakInfo = scipy.signal.find_peaks(dataset[:, 1], height=1, prominence=0.01, width=1)
+    returnPeaks = np.zeros((len(peaks), 2))
+    returnPeaks[:,0] = dataset[peaks, 0]
+    returnPeaks[:,1] = dataset[peaks, 1]
+    plt.plot(dataset[:, 0], dataset[:, 1])
+    plt.plot(dataset[peaks, 0], dataset[peaks, 1], "x")
+    plt.show()
+    return(returnPeaks)
 
 def selectionUI(echemData, echemWindow=np.empty([]), fittingData=np.empty([])):
     global fig
@@ -194,6 +195,7 @@ def selectionUI(echemData, echemWindow=np.empty([]), fittingData=np.empty([])):
         runLog("read window file")
 
         nPoly = int(input("Select Polynomial Order: "))
+        plt.close()
         polyBaselines = np.genfromtxt('.out/polys.out', delimiter=" ")
         baseline = np.zeros((len(echemData), 2))
         (baseline[:, 0], baseline[:, 1]) = (
